@@ -1,6 +1,7 @@
 package net.veroxuniverse.verox_rpg_prog.raid;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -12,17 +13,19 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.BossEvent;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntitySelector;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.NeutralMob;
-import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.AABB;
 import net.veroxuniverse.verox_rpg_prog.handler.MobEquipmentHandler;
 import net.veroxuniverse.verox_rpg_prog.stage.StageDefinition;
 import net.veroxuniverse.verox_rpg_prog.stage.StageRaid;
@@ -43,10 +46,10 @@ public class StageRaidInstance {
     private static final int MAX_TICKS = 36000;
     private static final int MAX_TICKS_WITHOUT_PLAYERS = 600;
     private static final double PLAYER_RANGE = 96.0;
-    private static final double TARGET_RANGE = 64.0;
     private static final int MIN_SPAWN_DISTANCE = 18;
     private static final int SPAWN_DISTANCE_VARIANCE = 10;
     private static final int MAX_SURFACE_HEIGHT_DIFFERENCE = 20;
+    private static final double NEARBY_TARGET_RANGE = 24.0;
     private static final int SPAWN_POSITION_ATTEMPTS = 24;
     private static final int MAX_SPAWN_RETRIES = 5;
     private static final int SPAWN_RETRY_DELAY = 40;
@@ -179,7 +182,7 @@ public class StageRaidInstance {
 
     private void tickFighting() {
         if (this.ticksActive % 20 == 0) {
-            this.enforcePlayerTargets();
+            this.enforceTargets();
         }
         if (this.ticksActive % 10 != 0) return;
 
@@ -194,7 +197,6 @@ public class StageRaidInstance {
             }
         }
         this.bossEvent.setProgress(this.totalHealth > 0.0F ? Mth.clamp(health / this.totalHealth, 0.0F, 1.0F) : 0.0F);
-        this.keepTargetingPlayers();
 
         if (!this.alive.isEmpty()) return;
 
@@ -207,55 +209,68 @@ public class StageRaidInstance {
         }
     }
 
-    private void keepTargetingPlayers() {
+    private void enforceTargets() {
         for (UUID uuid : this.alive) {
             if (!(this.level.getEntity(uuid) instanceof Mob mob)) continue;
-            if (mob.getTarget() instanceof Player current && current.isAlive() && !current.isCreative() && !current.isSpectator()) continue;
 
-            Player nearest = this.level.getNearestPlayer(mob.getX(), mob.getY(), mob.getZ(), TARGET_RANGE, EntitySelector.NO_CREATIVE_OR_SPECTATOR);
-            if (nearest == null) continue;
-
-            mob.setTarget(nearest);
-            if (mob instanceof NeutralMob neutral) {
-                neutral.setPersistentAngerTarget(nearest.getUUID());
-                neutral.startPersistentAngerTimer();
-            }
-        }
-    }
-
-    private void enforcePlayerTargets() {
-        for (UUID uuid : this.alive) {
-            if (!(this.level.getEntity(uuid) instanceof Mob mob)) continue;
-            if (mob.getTarget() instanceof Player current && isValidTarget(current)) continue;
-
-            Player target = this.findTargetFor(mob);
+            LivingEntity target = mob.getTarget() != null && this.isValidTarget(mob.getTarget())
+                    ? mob.getTarget()
+                    : this.findTargetFor(mob);
             if (target != null) {
-                mob.setTarget(target);
+                aimAt(mob, target);
             }
         }
     }
 
-    private Player findTargetFor(Mob mob) {
-        ServerPlayer primary = this.getTarget();
-        if (primary != null && isValidTarget(primary) && primary.distanceToSqr(mob) <= PLAYER_RANGE * PLAYER_RANGE) {
-            return primary;
+    private static void aimAt(Mob mob, LivingEntity target) {
+        if (mob.getTarget() != target) {
+            mob.setTarget(target);
         }
+        if (mob instanceof NeutralMob neutral) {
+            if (!target.getUUID().equals(neutral.getPersistentAngerTarget())) {
+                neutral.setPersistentAngerTarget(target.getUUID());
+            }
+            neutral.startPersistentAngerTimer();
+        }
+    }
 
-        Player nearest = null;
-        double nearestDistance = PLAYER_RANGE * PLAYER_RANGE;
-        for (ServerPlayer player : this.level.players()) {
-            if (!isValidTarget(player)) continue;
-            double distance = player.distanceToSqr(mob);
+    private LivingEntity findTargetFor(Mob mob) {
+        LivingEntity nearest = null;
+        double nearestDistance = NEARBY_TARGET_RANGE * NEARBY_TARGET_RANGE;
+        AABB area = mob.getBoundingBox().inflate(NEARBY_TARGET_RANGE);
+        for (LivingEntity candidate : this.level.getEntitiesOfClass(LivingEntity.class, area, this::isValidTarget)) {
+            double distance = candidate.distanceToSqr(mob);
             if (distance < nearestDistance) {
-                nearest = player;
+                nearest = candidate;
                 nearestDistance = distance;
             }
         }
-        return nearest;
+        if (nearest != null) return nearest;
+
+        ServerPlayer primary = this.getTarget();
+        if (primary != null && this.isValidTarget(primary) && primary.distanceToSqr(mob) <= PLAYER_RANGE * PLAYER_RANGE) {
+            return primary;
+        }
+
+        Player fallback = null;
+        double fallbackDistance = PLAYER_RANGE * PLAYER_RANGE;
+        for (ServerPlayer player : this.level.players()) {
+            if (!this.isValidTarget(player)) continue;
+            double distance = player.distanceToSqr(mob);
+            if (distance < fallbackDistance) {
+                fallback = player;
+                fallbackDistance = distance;
+            }
+        }
+        return fallback;
     }
 
-    private static boolean isValidTarget(Player player) {
-        return player.isAlive() && !player.isCreative() && !player.isSpectator();
+    private boolean isValidTarget(LivingEntity entity) {
+        if (!entity.isAlive() || this.alive.contains(entity.getUUID())) return false;
+        if (entity instanceof Player player) {
+            return !player.isCreative() && !player.isSpectator();
+        }
+        return entity instanceof OwnableEntity ownable && ownable.getOwnerUUID() != null;
     }
 
     private void tickEnding() {
@@ -331,6 +346,7 @@ public class StageRaidInstance {
         mob.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, this.level.getRandom().nextFloat() * 360.0F, 0.0F);
         mob.finalizeSpawn(this.level, this.level.getCurrentDifficultyAt(pos), MobSpawnType.EVENT, null);
         mob.setPersistenceRequired();
+        RaidMobGuard.mark(mob);
         this.level.addFreshEntityWithPassengers(mob);
 
         for (StageDefinition.EquipmentEntry entry : equipment) {
@@ -339,13 +355,9 @@ public class StageRaidInstance {
         MobScalingApplier.apply(mob, scaling, "raid_scaling");
         mob.setHealth(mob.getMaxHealth());
 
-        ServerPlayer target = this.getTarget();
-        if (target != null && !target.isCreative() && !target.isSpectator()) {
-            mob.setTarget(target);
-            if (mob instanceof NeutralMob neutral) {
-                neutral.setPersistentAngerTarget(target.getUUID());
-                neutral.startPersistentAngerTimer();
-            }
+        LivingEntity target = this.findTargetFor(mob);
+        if (target != null) {
+            aimAt(mob, target);
         }
         return mob;
     }
@@ -389,8 +401,11 @@ public class StageRaidInstance {
     }
 
     private boolean isStandable(BlockPos pos) {
-        BlockState ground = this.level.getBlockState(pos.below());
-        return ground.isSolidRender(this.level, pos.below())
+        BlockPos groundPos = pos.below();
+        BlockState ground = this.level.getBlockState(groundPos);
+        boolean solidGround = ground.isFaceSturdy(this.level, groundPos, Direction.UP)
+                || ground.getBlock() instanceof SnowLayerBlock;
+        return solidGround
                 && ground.getFluidState().isEmpty()
                 && this.isPassable(pos)
                 && this.isPassable(pos.above());
@@ -398,7 +413,9 @@ public class StageRaidInstance {
 
     private boolean isPassable(BlockPos pos) {
         BlockState state = this.level.getBlockState(pos);
-        return state.getCollisionShape(this.level, pos).isEmpty() && state.getFluidState().isEmpty();
+        return state.getCollisionShape(this.level, pos).isEmpty()
+                && state.getFluidState().isEmpty()
+                && !state.is(Blocks.POWDER_SNOW);
     }
 
     private void giveRewards() {
