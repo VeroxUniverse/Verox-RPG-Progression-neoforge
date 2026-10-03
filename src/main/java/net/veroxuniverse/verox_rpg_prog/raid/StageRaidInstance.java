@@ -213,7 +213,7 @@ public class StageRaidInstance {
         for (UUID uuid : this.alive) {
             if (!(this.level.getEntity(uuid) instanceof Mob mob)) continue;
 
-            LivingEntity target = mob.getTarget() != null && this.isValidTarget(mob.getTarget())
+            LivingEntity target = mob.getTarget() != null && this.canTarget(mob, mob.getTarget())
                     ? mob.getTarget()
                     : this.findTargetFor(mob);
             if (target != null) {
@@ -238,7 +238,7 @@ public class StageRaidInstance {
         LivingEntity nearest = null;
         double nearestDistance = NEARBY_TARGET_RANGE * NEARBY_TARGET_RANGE;
         AABB area = mob.getBoundingBox().inflate(NEARBY_TARGET_RANGE);
-        for (LivingEntity candidate : this.level.getEntitiesOfClass(LivingEntity.class, area, this::isValidTarget)) {
+        for (LivingEntity candidate : this.level.getEntitiesOfClass(LivingEntity.class, area, entity -> this.canTarget(mob, entity))) {
             double distance = candidate.distanceToSqr(mob);
             if (distance < nearestDistance) {
                 nearest = candidate;
@@ -248,14 +248,14 @@ public class StageRaidInstance {
         if (nearest != null) return nearest;
 
         ServerPlayer primary = this.getTarget();
-        if (primary != null && this.isValidTarget(primary) && primary.distanceToSqr(mob) <= PLAYER_RANGE * PLAYER_RANGE) {
+        if (primary != null && this.canTarget(mob, primary) && primary.distanceToSqr(mob) <= PLAYER_RANGE * PLAYER_RANGE) {
             return primary;
         }
 
         Player fallback = null;
         double fallbackDistance = PLAYER_RANGE * PLAYER_RANGE;
         for (ServerPlayer player : this.level.players()) {
-            if (!this.isValidTarget(player)) continue;
+            if (!this.canTarget(mob, player)) continue;
             double distance = player.distanceToSqr(mob);
             if (distance < fallbackDistance) {
                 fallback = player;
@@ -265,8 +265,13 @@ public class StageRaidInstance {
         return fallback;
     }
 
+    private boolean canTarget(Mob mob, LivingEntity entity) {
+        return this.isValidTarget(entity) && mob.canAttack(entity);
+    }
+
     private boolean isValidTarget(LivingEntity entity) {
         if (!entity.isAlive() || this.alive.contains(entity.getUUID())) return false;
+        if (!entity.isPickable() || !entity.canBeSeenAsEnemy()) return false;
         if (entity instanceof Player player) {
             return !player.isCreative() && !player.isSpectator();
         }
