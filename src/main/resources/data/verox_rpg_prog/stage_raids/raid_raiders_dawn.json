@@ -1,0 +1,93 @@
+{
+  "order": 0,
+  "name": "raid.verox_rpg_prog.raiders_dawn",
+  "display_item": "minecraft:goat_horn",
+  "trigger": {
+    "time": "night",
+    "chance": 0.05,
+    "check_interval": 1200,
+    "cooldown": 72000
+  },
+  "waves": [
+    {
+      "mobs": [
+        {
+          "entity": "minecraft:pillager",
+          "display_item": "minecraft:crossbow",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "mobs": [
+        {
+          "entity": "minecraft:pillager",
+          "display_item": "minecraft:crossbow",
+          "count": 3
+        },
+        {
+          "entity": "minecraft:vindicator",
+          "display_item": "minecraft:iron_axe",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "mobs": [
+        {
+          "entity": "minecraft:vindicator",
+          "display_item": "minecraft:iron_axe",
+          "count": 3
+        },
+        {
+          "entity": "minecraft:witch",
+          "display_item": "minecraft:splash_potion",
+          "count": 1
+        },
+        {
+          "entity": "irons_spellbooks:cultist",
+          "display_item": "irons_spellbooks:blood_vial",
+          "count": 1,
+          "required_mods": [
+            "irons_spellbooks"
+          ]
+        }
+      ]
+    }
+  ],
+  "leader": {
+    "entity": "minecraft:vindicator",
+    "display_item": "minecraft:iron_axe",
+    "equipment": [
+      {
+        "slot": "mainhand",
+        "item": "minecraft:iron_axe",
+        "enchantments": [
+          {
+            "id": "minecraft:sharpness",
+            "level": 2
+          }
+        ],
+        "drop_chance": 0.0
+      }
+    ],
+    "scaling": {
+      "health_multiplier": 2.0,
+      "damage_multiplier": 1.3
+    }
+  },
+  "mob_scaling": {
+    "health_multiplier": 1.1
+  },
+  "reward": {
+    "type": "map",
+    "items": [
+      {
+        "item": "minecraft:emerald",
+        "count_min": 3,
+        "count_max": 6,
+        "chance": 1.0
+      }
+    ]
+  }
+}

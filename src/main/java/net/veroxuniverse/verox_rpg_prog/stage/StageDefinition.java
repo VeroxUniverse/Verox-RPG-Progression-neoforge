@@ -19,7 +19,8 @@ public record StageDefinition(
         List<ResourceLocation> lockedItems,
         List<ResourceLocation> lockedBlocks,
         List<ResourceLocation> lockedDimensions,
-        List<Territory> territories
+        List<Territory> territories,
+        List<StageRaid> raids
 ) {
     public record Territory(
             List<String> structures,
@@ -211,7 +212,8 @@ public record StageDefinition(
                     ResourceLocation.CODEC.listOf().optionalFieldOf("locked_items", List.of()).forGetter(StageDefinition::lockedItems),
                     ResourceLocation.CODEC.listOf().optionalFieldOf("locked_blocks_to_mine", List.of()).forGetter(StageDefinition::lockedBlocks),
                     ResourceLocation.CODEC.listOf().optionalFieldOf("locked_dimensions", List.of()).forGetter(StageDefinition::lockedDimensions),
-                    Territory.CODEC.listOf().optionalFieldOf("territories", List.of()).forGetter(StageDefinition::territories)
+                    Territory.CODEC.listOf().optionalFieldOf("territories", List.of()).forGetter(StageDefinition::territories),
+                    StageRaid.CODEC.listOf().optionalFieldOf("raids", List.of()).forGetter(StageDefinition::raids)
             ).apply(instance, StageDefinition::new)
     );
 }

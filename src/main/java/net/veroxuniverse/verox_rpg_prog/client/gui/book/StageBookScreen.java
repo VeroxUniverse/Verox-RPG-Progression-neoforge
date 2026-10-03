@@ -18,15 +18,17 @@ import net.veroxuniverse.verox_rpg_prog.client.gui.guide.GuideRow;
 import net.veroxuniverse.verox_rpg_prog.client.key.ModKeyMappings;
 import net.veroxuniverse.verox_rpg_prog.stage.StageDefinition;
 import net.veroxuniverse.verox_rpg_prog.stage.StageManager;
+import net.veroxuniverse.verox_rpg_prog.stage.StageRaid;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 public class StageBookScreen extends Screen {
 
-    private enum View { LANDING, STAGE, BOSS }
+    private enum View { LANDING, STAGE, BOSS, RAID, WAVE }
 
     private enum StageStatus { CLEARED, CURRENT, LOCKED }
 
@@ -41,7 +43,38 @@ public class StageBookScreen extends Screen {
         }
     }
 
-    private record IconEntry(ItemStack stack, List<Component> extraTooltip) {}
+    private record IconEntry(ItemStack stack, List<Component> extraTooltip, boolean itemTooltip) {
+        IconEntry(ItemStack stack, List<Component> extraTooltip) {
+            this(stack, extraTooltip, true);
+        }
+    }
+
+    private record RaidEntry(Kind kind, FormattedCharSequence line, Component rowText, int color, ItemStack icon,
+                             List<Component> tooltip, Runnable action, List<IconEntry> icons, int height) {
+        enum Kind { LABEL, TEXT, ROW, GRID, GAP }
+
+        static RaidEntry label(Component text) {
+            return new RaidEntry(Kind.LABEL, text.getVisualOrderText(), null, BookLayout.HEADER_COLOR, ItemStack.EMPTY, List.of(), null, List.of(), BookLayout.LINE_HEIGHT + 3);
+        }
+
+        static RaidEntry text(FormattedCharSequence line, int color) {
+            return new RaidEntry(Kind.TEXT, line, null, color, ItemStack.EMPTY, List.of(), null, List.of(), BookLayout.LINE_HEIGHT);
+        }
+
+        static RaidEntry row(ItemStack icon, Component text, List<Component> tooltip, Runnable action) {
+            return new RaidEntry(Kind.ROW, null, text, BookLayout.TEXT_COLOR, icon, tooltip, action, List.of(), BookLayout.ICON_ROW_HEIGHT);
+        }
+
+        static RaidEntry grid(List<IconEntry> icons) {
+            int perRow = BookLayout.PAGE_WIDTH / BookLayout.ICON_ROW_HEIGHT;
+            int rows = Math.max(1, (icons.size() + perRow - 1) / perRow);
+            return new RaidEntry(Kind.GRID, null, null, 0, ItemStack.EMPTY, List.of(), null, icons, rows * BookLayout.ICON_ROW_HEIGHT);
+        }
+
+        static RaidEntry gap(int height) {
+            return new RaidEntry(Kind.GAP, null, null, 0, ItemStack.EMPTY, List.of(), null, List.of(), height);
+        }
+    }
 
     private record Line(FormattedCharSequence text, ItemStack icon, int color, int height, boolean centered, int indent) {
         static Line text(FormattedCharSequence text, int color) {
@@ -79,12 +112,16 @@ public class StageBookScreen extends Screen {
         }
     }
 
+    private static final Item DEFAULT_MOB_ICON = Items.IRON_SWORD;
+
     private final List<Region> regions = new ArrayList<>();
     private View view = View.LANDING;
     private int listPage;
     private List<Page> pages = List.of();
     private int spread;
     private int stageSpreadBeforeBoss;
+    private int raidSpreadBeforeWave;
+    private StageRaid selectedRaid;
     private StageDefinition selectedStage;
     private int bookLeft;
     private int bookTop;
@@ -235,7 +272,12 @@ public class StageBookScreen extends Screen {
             this.drawArrow(graphics, false, mouseX, mouseY, () -> this.spread++);
         }
 
-        this.drawBackButton(graphics, mouseX, mouseY, this.view == View.BOSS ? this::returnToStage : this::returnToLanding);
+        Runnable back = switch (this.view) {
+            case BOSS, RAID -> this::returnToStage;
+            case WAVE -> this::returnToRaid;
+            default -> this::returnToLanding;
+        };
+        this.drawBackButton(graphics, mouseX, mouseY, back);
     }
 
     private List<Page> buildStagePages(StageDefinition stage) {
@@ -280,6 +322,10 @@ public class StageBookScreen extends Screen {
             result.addAll(this.paginateLines(Component.translatable("gui.verox_rpg_prog.book.territories"), this.territoryLines(stage, status)));
         }
 
+        if (!stage.raids().isEmpty()) {
+            result.addAll(this.paginateRaidEntries(Component.translatable("gui.verox_rpg_prog.book.raids"), this.raidListEntries(stage)));
+        }
+
         List<IconEntry> sealed = sealedEntries(stage);
         if (!sealed.isEmpty()) {
             result.addAll(this.paginateGrid(Component.translatable("gui.verox_rpg_prog.sealed_items_label"), sealed));
@@ -322,6 +368,302 @@ public class StageBookScreen extends Screen {
             }
         }
         return lines;
+    }
+
+    private List<RaidEntry> raidListEntries(StageDefinition stage) {
+        List<RaidEntry> entries = new ArrayList<>();
+        for (StageRaid raid : stage.raids()) {
+            List<Component> tooltip = List.of(
+                    raidTimeText(raid).copy().withStyle(ChatFormatting.GRAY),
+                    Component.translatable("gui.verox_rpg_prog.click_to_see_raid_details")
+            );
+            entries.add(RaidEntry.row(raidIcon(raid), Component.translatable(raid.name()), tooltip, () -> this.openRaid(raid)));
+        }
+        return entries;
+    }
+
+    private List<Page> buildRaidPages(StageRaid raid) {
+        List<RaidEntry> overview = new ArrayList<>();
+        for (FormattedCharSequence line : this.font.split(raidTimeText(raid), BookLayout.PAGE_WIDTH)) {
+            overview.add(RaidEntry.text(line, BookLayout.MUTED_COLOR));
+        }
+        overview.add(RaidEntry.gap(6));
+        overview.add(RaidEntry.label(subheader("gui.verox_rpg_prog.book.raid_waves")));
+
+        for (int i = 0; i < raid.waves().size(); i++) {
+            int waveIndex = i;
+            List<StageRaid.WaveMob> mobs = availableMobs(raid.waves().get(i));
+            List<Component> tooltip = new ArrayList<>();
+            for (StageRaid.WaveMob mob : mobs) {
+                tooltip.add(Component.translatable("gui.verox_rpg_prog.book.raid_mob_line", mob.count(), entityName(mob.entity())).withStyle(ChatFormatting.GRAY));
+            }
+            tooltip.add(Component.translatable("gui.verox_rpg_prog.click_to_see_wave_details"));
+
+            ItemStack icon = mobs.isEmpty() ? new ItemStack(DEFAULT_MOB_ICON) : waveMobStack(mobs.getFirst(), 1);
+            overview.add(RaidEntry.row(icon, Component.translatable("gui.verox_rpg_prog.book.raid_wave_title", i + 1), tooltip, () -> this.openWave(waveIndex)));
+        }
+
+        raid.leader().filter(StageRaid.RaidMob::isAvailable).ifPresent(leader -> {
+            overview.add(RaidEntry.gap(4));
+            overview.add(RaidEntry.label(subheader("gui.verox_rpg_prog.book.raid_leader_header")));
+            overview.add(RaidEntry.row(leaderStack(leader), entityName(leader.entity()), leaderTooltip(leader), null));
+        });
+
+        List<Page> result = new ArrayList<>(this.paginateRaidEntries(Component.translatable(raid.name()), overview));
+        List<RaidEntry> rewards = this.rewardEntries(raid);
+        if (!rewards.isEmpty()) {
+            result.addAll(this.paginateRaidEntries(Component.translatable("gui.verox_rpg_prog.book.raid_reward_header"), rewards));
+        }
+        return result;
+    }
+
+    private List<RaidEntry> rewardEntries(StageRaid raid) {
+        List<RaidEntry> entries = new ArrayList<>();
+        List<IconEntry> icons = rewardIcons(raid, this.selectedStage);
+        String type = raid.reward().type().toLowerCase();
+        boolean hasLocator = type.equals("map") || type.equals("compass");
+
+        if (hasLocator && !icons.isEmpty()) {
+            IconEntry locator = icons.getFirst();
+            Component name = Component.translatable(type.equals("map")
+                    ? "gui.verox_rpg_prog.book.raid_reward.map_name"
+                    : "gui.verox_rpg_prog.book.raid_reward.compass_name");
+            entries.add(RaidEntry.row(locator.stack(), name, locator.extraTooltip(), null));
+            entries.add(RaidEntry.gap(2));
+            for (FormattedCharSequence line : this.font.split(Component.translatable(type.equals("map")
+                    ? "gui.verox_rpg_prog.book.raid_reward.map_desc"
+                    : "gui.verox_rpg_prog.book.raid_reward.compass_desc"), BookLayout.PAGE_WIDTH)) {
+                entries.add(RaidEntry.text(line, BookLayout.TEXT_COLOR));
+            }
+            icons = icons.subList(1, icons.size());
+        }
+
+        if (!icons.isEmpty()) {
+            if (!entries.isEmpty()) {
+                entries.add(RaidEntry.gap(6));
+            }
+            entries.add(RaidEntry.label(subheader("gui.verox_rpg_prog.book.raid_items")));
+            entries.add(RaidEntry.grid(List.copyOf(icons)));
+        }
+        return entries;
+    }
+
+    private List<Page> buildWavePages(StageRaid raid, int waveIndex) {
+        List<RaidEntry> entries = new ArrayList<>();
+        List<IconEntry> mobs = new ArrayList<>();
+        for (StageRaid.WaveMob mob : availableMobs(raid.waves().get(waveIndex))) {
+            mobs.add(waveMobIcon(mob));
+        }
+        if (!mobs.isEmpty()) {
+            entries.add(RaidEntry.grid(mobs));
+        }
+
+        boolean lastWave = waveIndex == raid.waves().size() - 1;
+        if (lastWave) {
+            raid.leader().filter(StageRaid.RaidMob::isAvailable).ifPresent(leader -> {
+                entries.add(RaidEntry.gap(6));
+                entries.add(RaidEntry.label(subheader("gui.verox_rpg_prog.book.raid_leader_header")));
+                entries.add(RaidEntry.grid(List.of(new IconEntry(leaderStack(leader), leaderTooltip(leader), false))));
+            });
+        }
+
+        return this.paginateRaidEntries(Component.translatable("gui.verox_rpg_prog.book.raid_wave_title", waveIndex + 1), entries);
+    }
+
+    private List<Page> paginateRaidEntries(Component header, List<RaidEntry> entries) {
+        List<Page> result = new ArrayList<>();
+        List<RaidEntry> current = new ArrayList<>();
+        int used = 0;
+        int capacity = BookLayout.CONTENT_BOTTOM - BookLayout.CONTENT_TOP;
+
+        for (int i = 0; i < entries.size(); i++) {
+            RaidEntry entry = entries.get(i);
+            int needed = entry.height();
+            if (entry.kind() == RaidEntry.Kind.LABEL && i + 1 < entries.size()) {
+                needed += entries.get(i + 1).height();
+            }
+
+            if (used + needed > capacity && !current.isEmpty()) {
+                result.add(this.raidEntryPage(header, List.copyOf(current)));
+                current.clear();
+                used = 0;
+                if (entry.kind() == RaidEntry.Kind.GAP) continue;
+            }
+            current.add(entry);
+            used += entry.height();
+        }
+        if (!current.isEmpty() || result.isEmpty()) {
+            result.add(this.raidEntryPage(header, List.copyOf(current)));
+        }
+        return result;
+    }
+
+    private Page raidEntryPage(Component header, List<RaidEntry> entries) {
+        int perRow = BookLayout.PAGE_WIDTH / BookLayout.ICON_ROW_HEIGHT;
+        return (graphics, pageX, mouseX, mouseY) -> {
+            this.drawPageHeader(graphics, pageX, header);
+            int y = BookLayout.CONTENT_TOP;
+
+            for (RaidEntry entry : entries) {
+                switch (entry.kind()) {
+                    case LABEL -> graphics.drawString(this.font, entry.line(), pageX, y + 2, entry.color(), false);
+                    case TEXT -> graphics.drawString(this.font, entry.line(), pageX, y, entry.color(), false);
+                    case GRID -> this.renderIconGrid(graphics, entry.icons(), pageX, y, perRow, mouseX, mouseY);
+                    case ROW -> this.renderRaidRow(graphics, entry, pageX, y, mouseX, mouseY);
+                    case GAP -> {
+                    }
+                }
+                y += entry.height();
+            }
+        };
+    }
+
+    private void renderRaidRow(GuiGraphics graphics, RaidEntry entry, int x, int y, int mouseX, int mouseY) {
+        Region region = new Region(x, y, BookLayout.PAGE_WIDTH, BookLayout.ICON_ROW_HEIGHT, entry.action() != null ? entry.action() : () -> {});
+        if (region.contains(mouseX, mouseY)) {
+            if (entry.action() != null) {
+                graphics.fill(x - 1, y - 1, x + BookLayout.PAGE_WIDTH, y + BookLayout.ICON_ROW_HEIGHT - 1, BookLayout.HOVER_FILL);
+            }
+            this.pendingTooltip = entry.tooltip();
+        }
+
+        graphics.renderItem(entry.icon(), x, y);
+        String text = this.font.plainSubstrByWidth(entry.rowText().getString(), BookLayout.PAGE_WIDTH - 20);
+        graphics.drawString(this.font, text, x + 19, y + 4, entry.color(), false);
+
+        if (entry.action() != null) {
+            this.regions.add(region);
+        }
+    }
+
+    private static Component raidTimeText(StageRaid raid) {
+        return Component.translatable(switch (raid.trigger().time().toLowerCase()) {
+            case "day" -> "gui.verox_rpg_prog.book.raid_time.day";
+            case "any" -> "gui.verox_rpg_prog.book.raid_time.any";
+            default -> "gui.verox_rpg_prog.book.raid_time.night";
+        });
+    }
+
+    private static List<StageRaid.WaveMob> availableMobs(StageRaid.Wave wave) {
+        return wave.mobs().stream().filter(StageRaid.WaveMob::isAvailable).toList();
+    }
+
+    private static ItemStack raidIcon(StageRaid raid) {
+        if (raid.displayItem().isPresent()) {
+            return resolveItem(raid.displayItem().get());
+        }
+        if (raid.leader().isPresent() && raid.leader().get().isAvailable()) {
+            return leaderStack(raid.leader().get());
+        }
+        for (StageRaid.Wave wave : raid.waves()) {
+            List<StageRaid.WaveMob> mobs = availableMobs(wave);
+            if (!mobs.isEmpty()) {
+                return waveMobStack(mobs.getFirst(), 1);
+            }
+        }
+        return new ItemStack(DEFAULT_MOB_ICON);
+    }
+
+    private static ItemStack waveMobStack(StageRaid.WaveMob mob, int count) {
+        ItemStack stack = mobDisplayStack(mob.displayItem(), mob.equipment());
+        stack.setCount(Math.max(1, Math.min(99, count)));
+        return stack;
+    }
+
+    private static ItemStack leaderStack(StageRaid.RaidMob leader) {
+        return mobDisplayStack(leader.displayItem(), leader.equipment());
+    }
+
+    private static ItemStack mobDisplayStack(Optional<ResourceLocation> displayItem, List<StageDefinition.EquipmentEntry> equipment) {
+        if (displayItem.isPresent()) {
+            ItemStack stack = resolveItem(displayItem.get());
+            if (!stack.isEmpty()) return stack;
+        }
+        for (StageDefinition.EquipmentEntry entry : equipment) {
+            Item item = BuiltInRegistries.ITEM.get(entry.item());
+            if (item != Items.AIR) return new ItemStack(item);
+        }
+        return new ItemStack(DEFAULT_MOB_ICON);
+    }
+
+    private static IconEntry waveMobIcon(StageRaid.WaveMob mob) {
+        List<Component> tooltip = new ArrayList<>();
+        tooltip.add(entityName(mob.entity()).copy().withStyle(ChatFormatting.WHITE));
+        tooltip.add(Component.translatable("gui.verox_rpg_prog.book.raid_count", mob.count()).withStyle(ChatFormatting.GRAY));
+        if (!mob.equipment().isEmpty()) {
+            tooltip.add(Component.translatable("gui.verox_rpg_prog.book.raid_equipment").withStyle(ChatFormatting.GRAY));
+            for (StageDefinition.EquipmentEntry entry : mob.equipment()) {
+                Item item = BuiltInRegistries.ITEM.get(entry.item());
+                if (item != Items.AIR) {
+                    tooltip.add(Component.literal(" ").append(new ItemStack(item).getHoverName()).withStyle(ChatFormatting.DARK_GRAY));
+                }
+            }
+        }
+        return new IconEntry(waveMobStack(mob, mob.count()), tooltip, false);
+    }
+
+    private static List<Component> leaderTooltip(StageRaid.RaidMob leader) {
+        List<Component> tooltip = new ArrayList<>();
+        tooltip.add(entityName(leader.entity()).copy().withStyle(ChatFormatting.GOLD));
+        tooltip.add(Component.translatable("gui.verox_rpg_prog.book.raid_leader_tooltip").withStyle(ChatFormatting.GRAY));
+        StageDefinition.MobAttributeScaling scaling = leader.scaling();
+        if (scaling.healthMultiplier() > 1.0f) {
+            tooltip.add(Component.translatable("gui.verox_rpg_prog.book.raid_scaling.health", formatMultiplier(scaling.healthMultiplier())).withStyle(ChatFormatting.RED));
+        }
+        if (scaling.damageMultiplier() > 1.0f) {
+            tooltip.add(Component.translatable("gui.verox_rpg_prog.book.raid_scaling.damage", formatMultiplier(scaling.damageMultiplier())).withStyle(ChatFormatting.RED));
+        }
+        if (scaling.armorMultiplier() > 1.0f) {
+            tooltip.add(Component.translatable("gui.verox_rpg_prog.book.raid_scaling.armor", formatMultiplier(scaling.armorMultiplier())).withStyle(ChatFormatting.RED));
+        }
+        return tooltip;
+    }
+
+    private static String formatMultiplier(float value) {
+        return String.format(Locale.ROOT, "%.1f", value);
+    }
+
+    private static List<IconEntry> rewardIcons(StageRaid raid, StageDefinition stage) {
+        List<IconEntry> icons = new ArrayList<>();
+        String type = raid.reward().type().toLowerCase();
+
+        if (type.equals("map") || type.equals("compass")) {
+            List<String> structures = new ArrayList<>(raid.reward().structures());
+            if (structures.isEmpty()) {
+                for (StageDefinition.Territory territory : stage.territories()) {
+                    structures.addAll(territory.structures());
+                }
+            }
+
+            List<Component> tooltip = new ArrayList<>();
+            tooltip.add(Component.translatable(type.equals("map")
+                    ? "gui.verox_rpg_prog.book.raid_reward.map"
+                    : "gui.verox_rpg_prog.book.raid_reward.compass").withStyle(ChatFormatting.YELLOW));
+            if (!structures.isEmpty()) {
+                tooltip.add(Component.translatable("gui.verox_rpg_prog.book.raid_reward.leads_to").withStyle(ChatFormatting.GRAY));
+                for (String structure : structures) {
+                    tooltip.add(Component.literal(" ").append(territoryEntryName(structure, "structure")).withStyle(ChatFormatting.DARK_GRAY));
+                }
+            }
+            icons.add(new IconEntry(new ItemStack(type.equals("map") ? Items.FILLED_MAP : Items.COMPASS), tooltip, false));
+        }
+
+        for (StageDefinition.DropEntry drop : raid.reward().items()) {
+            Item item = BuiltInRegistries.ITEM.get(drop.item());
+            if (item == Items.AIR) continue;
+
+            icons.add(new IconEntry(new ItemStack(item, Math.max(1, drop.countMax())), List.of(
+                    Component.translatable("gui.verox_rpg_prog.chance_label", (int) (drop.chance() * 100)),
+                    Component.translatable("gui.verox_rpg_prog.amount_label", drop.countMin(), drop.countMax())
+            )));
+        }
+        return icons;
+    }
+
+    private static Component entityName(ResourceLocation entityId) {
+        return BuiltInRegistries.ENTITY_TYPE.containsKey(entityId)
+                ? BuiltInRegistries.ENTITY_TYPE.get(entityId).getDescription()
+                : Component.literal(entityId.toString());
     }
 
     private List<Page> buildBossPages(StageDefinition.BossInfo boss) {
@@ -478,7 +820,7 @@ public class StageBookScreen extends Screen {
             graphics.renderItemDecorations(this.font, entry.stack(), iconX, iconY);
 
             if (mouseX >= iconX && mouseX < iconX + 16 && mouseY >= iconY && mouseY < iconY + 16) {
-                this.pendingItemTooltip = entry.stack();
+                this.pendingItemTooltip = entry.itemTooltip() ? entry.stack() : ItemStack.EMPTY;
                 this.pendingTooltip = entry.extraTooltip();
             }
         }
@@ -535,6 +877,27 @@ public class StageBookScreen extends Screen {
         this.pages = this.buildBossPages(boss);
         this.spread = 0;
         this.view = View.BOSS;
+    }
+
+    private void openRaid(StageRaid raid) {
+        this.stageSpreadBeforeBoss = this.spread;
+        this.selectedRaid = raid;
+        this.pages = this.buildRaidPages(raid);
+        this.spread = 0;
+        this.view = View.RAID;
+    }
+
+    private void openWave(int waveIndex) {
+        this.raidSpreadBeforeWave = this.spread;
+        this.pages = this.buildWavePages(this.selectedRaid, waveIndex);
+        this.spread = 0;
+        this.view = View.WAVE;
+    }
+
+    private void returnToRaid() {
+        this.pages = this.buildRaidPages(this.selectedRaid);
+        this.spread = this.raidSpreadBeforeWave;
+        this.view = View.RAID;
     }
 
     private void returnToStage() {

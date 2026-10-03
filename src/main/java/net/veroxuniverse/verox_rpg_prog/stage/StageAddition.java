@@ -40,7 +40,25 @@ public record StageAddition(
                 concat(stage.lockedItems(), this.lockedItems),
                 concat(stage.lockedBlocks(), this.lockedBlocks),
                 concat(stage.lockedDimensions(), this.lockedDimensions),
-                concat(stage.territories(), this.territories)
+                concat(stage.territories(), this.territories),
+                stage.raids()
+        );
+    }
+
+    public static StageDefinition withRaid(StageDefinition stage, StageRaid raid) {
+        return new StageDefinition(
+                stage.order(),
+                stage.translationKey(),
+                stage.mobAttributeScaling(),
+                stage.mobEquipment(),
+                stage.lockedOres(),
+                stage.mainBoss(),
+                stage.optionalBosses(),
+                stage.lockedItems(),
+                stage.lockedBlocks(),
+                stage.lockedDimensions(),
+                stage.territories(),
+                concat(stage.raids(), List.of(raid))
         );
     }
 

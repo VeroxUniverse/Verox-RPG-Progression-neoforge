@@ -5,7 +5,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.veroxuniverse.verox_rpg_prog.RPGProgression;
-import net.veroxuniverse.verox_rpg_prog.lootbag.ModItems;
+import net.veroxuniverse.verox_rpg_prog.registry.ModItems;
 
 @EventBusSubscriber(modid = RPGProgression.MOD_ID)
 public final class BookCreativeTabHandler {

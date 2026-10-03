@@ -1,4 +1,4 @@
-package net.veroxuniverse.verox_rpg_prog.lootbag;
+package net.veroxuniverse.verox_rpg_prog.registry;
 
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Rarity;
@@ -6,6 +6,7 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.veroxuniverse.verox_rpg_prog.RPGProgression;
 import net.veroxuniverse.verox_rpg_prog.book.StageBookItem;
+import net.veroxuniverse.verox_rpg_prog.lootbag.LootBagItem;
 
 public class ModItems {
 

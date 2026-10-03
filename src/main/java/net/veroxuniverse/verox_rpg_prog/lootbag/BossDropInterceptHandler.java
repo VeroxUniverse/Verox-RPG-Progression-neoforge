@@ -18,6 +18,8 @@ import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
 import net.veroxuniverse.verox_rpg_prog.RPGProgression;
 import net.veroxuniverse.verox_rpg_prog.api.ProgressionApi;
 import net.veroxuniverse.verox_rpg_prog.config.RPGProgressionConfig;
+import net.veroxuniverse.verox_rpg_prog.registry.ModItems;
+import net.veroxuniverse.verox_rpg_prog.registry.ModTags;
 import net.veroxuniverse.verox_rpg_prog.stage.StageDefinition;
 
 import java.util.ArrayList;

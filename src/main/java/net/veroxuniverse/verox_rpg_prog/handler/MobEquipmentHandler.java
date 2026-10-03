@@ -37,7 +37,7 @@ public class MobEquipmentHandler {
         });
     }
 
-    private static void applyEquipment(Mob entity, ServerLevel serverLevel, StageDefinition.EquipmentEntry entry) {
+    public static void applyEquipment(Mob entity, ServerLevel serverLevel, StageDefinition.EquipmentEntry entry) {
         EquipmentSlot slot = resolveSlot(entry.slot());
         if (slot == null) {
             RPGProgression.LOGGER.warn("MobEquipmentHandler: unknown slot '{}' for {}", entry.slot(), entry.item());

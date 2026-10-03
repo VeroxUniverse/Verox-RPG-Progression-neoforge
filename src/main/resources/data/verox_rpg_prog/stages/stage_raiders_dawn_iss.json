@@ -1,5 +1,5 @@
 {
-  "excluded_mods": [
+  "required_mods": [
     "irons_spellbooks"
   ],
   "order": 0,
@@ -8,7 +8,8 @@
     {
       "structures": [
         "minecraft:mansion",
-        "minecraft:pillager_outpost"
+        "minecraft:pillager_outpost",
+        "irons_spellbooks:evoker_fort"
       ],
       "damage_per_second": 0.5,
       "max_health_percent_per_second": 0.03,
@@ -27,9 +28,9 @@
     "armor_multiplier": 0.0
   },
   "main_boss": {
-    "entity_id": "minecraft:evoker",
-    "display_item": "minecraft:totem_of_undying",
-    "location_translation_key": "boss.verox_rpg_prog.evoker.location",
+    "entity_id": "irons_spellbooks:archevoker",
+    "display_item": "irons_spellbooks:evoker_spell_book",
+    "location_translation_key": "boss.verox_rpg_prog.archevoker.location",
     "guaranteed_drops": [],
     "player_scaling": {
       "radius": 24.0,
@@ -51,6 +52,23 @@
     }
   },
   "optional_bosses": [
+    {
+      "entity_id": "minecraft:evoker",
+      "display_item": "minecraft:totem_of_undying",
+      "location_translation_key": "boss.verox_rpg_prog.evoker.location",
+      "guaranteed_drops": [],
+      "drops": {
+        "mode": "additional",
+        "drops": [
+          {
+            "item": "minecraft:totem_of_undying",
+            "count_min": 1,
+            "count_max": 1,
+            "chance": 0.5
+          }
+        ]
+      }
+    },
     {
       "entity_id": "minecraft:pillager",
       "display_item": "minecraft:crossbow",
@@ -120,7 +138,42 @@
     "minecraft:spyglass",
     "minecraft:lightning_rod",
     "minecraft:redstone",
-    "minecraft:emerald"
+    "minecraft:emerald",
+    "irons_spellbooks:scroll",
+    "irons_spellbooks:wimpy_spell_book",
+    "irons_spellbooks:copper_spell_book",
+    "irons_spellbooks:iron_spell_book",
+    "irons_spellbooks:gold_spell_book",
+    "irons_spellbooks:diamond_spell_book",
+    "irons_spellbooks:rotten_spell_book",
+    "irons_spellbooks:villager_spell_book",
+    "irons_spellbooks:druidic_spell_book",
+    "irons_spellbooks:ice_spell_book",
+    "irons_spellbooks:evoker_spell_book",
+    "irons_spellbooks:necronomicon_spell_book",
+    "irons_spellbooks:cursed_doll_spell_book",
+    "irons_spellbooks:blaze_spell_book",
+    "irons_spellbooks:dragonskin_spell_book",
+    "irons_spellbooks:legendary_spell_book",
+    "irons_spellbooks:graybeard_staff",
+    "irons_spellbooks:mana_ring",
+    "irons_spellbooks:silver_ring",
+    "irons_spellbooks:cooldown_ring",
+    "irons_spellbooks:cast_time_ring",
+    "irons_spellbooks:heavy_chain_necklace",
+    "irons_spellbooks:emerald_stoneplate_ring",
+    "irons_spellbooks:wandering_magician_helmet",
+    "irons_spellbooks:wandering_magician_chestplate",
+    "irons_spellbooks:wandering_magician_leggings",
+    "irons_spellbooks:wandering_magician_boots",
+    "irons_spellbooks:pumpkin_helmet",
+    "irons_spellbooks:pumpkin_chestplate",
+    "irons_spellbooks:pumpkin_leggings",
+    "irons_spellbooks:pumpkin_boots",
+    "irons_spellbooks:archevoker_helmet",
+    "irons_spellbooks:archevoker_chestplate",
+    "irons_spellbooks:archevoker_leggings",
+    "irons_spellbooks:archevoker_boots"
   ],
   "locked_blocks_to_mine": [
     "minecraft:blast_furnace",
@@ -136,7 +189,8 @@
     "minecraft:hopper",
     "minecraft:crafter",
     "minecraft:redstone_lamp",
-    "minecraft:trapped_chest"
+    "minecraft:trapped_chest",
+    "irons_spellbooks:inscription_table"
   ],
   "locked_ores": [
     {

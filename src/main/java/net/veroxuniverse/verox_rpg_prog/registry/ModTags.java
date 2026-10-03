@@ -1,4 +1,4 @@
-package net.veroxuniverse.verox_rpg_prog.lootbag;
+package net.veroxuniverse.verox_rpg_prog.registry;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;

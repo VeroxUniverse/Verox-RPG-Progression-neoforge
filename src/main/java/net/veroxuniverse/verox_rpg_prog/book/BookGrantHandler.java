@@ -9,7 +9,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.veroxuniverse.verox_rpg_prog.RPGProgression;
 import net.veroxuniverse.verox_rpg_prog.config.RPGProgressionConfig;
-import net.veroxuniverse.verox_rpg_prog.lootbag.ModItems;
+import net.veroxuniverse.verox_rpg_prog.registry.ModItems;
 
 @EventBusSubscriber(modid = RPGProgression.MOD_ID)
 public final class BookGrantHandler {

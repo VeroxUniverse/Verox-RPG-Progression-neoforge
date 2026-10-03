@@ -28,6 +28,7 @@ public class StageDataLoader extends SimpleJsonResourceReloadListener {
     private static final Logger LOGGER = LoggerFactory.getLogger(StageDataLoader.class);
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String ADDITIONS_DIRECTORY = "stage_additions";
+    private static final String RAIDS_DIRECTORY = "stage_raids";
 
     public StageDataLoader() {
         super(GSON, "stages");
@@ -49,10 +50,11 @@ public class StageDataLoader extends SimpleJsonResourceReloadListener {
         }
 
         int additions = this.applyAdditions(loadedStages, resourceManager);
+        int raids = this.applyRaids(loadedStages, resourceManager);
 
         StageManager.reloadStages(loadedStages);
-        LOGGER.info("Loaded {} world progression stages ({} skipped by mod requirements, {} additions applied).",
-                loadedStages.size(), skipped, additions);
+        LOGGER.info("Loaded {} world progression stages ({} skipped by mod requirements, {} additions and {} raids applied).",
+                loadedStages.size(), skipped, additions, raids);
     }
 
     private int applyAdditions(Map<ResourceLocation, StageDefinition> stages, ResourceManager resourceManager) {
@@ -89,6 +91,50 @@ public class StageDataLoader extends SimpleJsonResourceReloadListener {
                 applied++;
             } else {
                 LOGGER.warn("Stage addition {} targets order {}, but no stage with that order is loaded.", entry.getKey(), addition.order());
+            }
+        }
+        return applied;
+    }
+
+    private int applyRaids(Map<ResourceLocation, StageDefinition> stages, ResourceManager resourceManager) {
+        Map<ResourceLocation, Resource> resources = new TreeMap<>(
+                resourceManager.listResources(RAIDS_DIRECTORY, path -> path.getPath().endsWith(".json"))
+        );
+        int applied = 0;
+
+        for (Map.Entry<ResourceLocation, Resource> entry : resources.entrySet()) {
+            JsonElement json;
+            try (Reader reader = entry.getValue().openAsReader()) {
+                json = JsonParser.parseReader(reader);
+            } catch (Exception exception) {
+                LOGGER.error("Failed to read stage raid {}", entry.getKey(), exception);
+                continue;
+            }
+
+            if (!ModRequirements.areMet(json)) continue;
+            if (!json.isJsonObject() || !json.getAsJsonObject().has("order")) {
+                LOGGER.error("Stage raid {} is missing its 'order' field.", entry.getKey());
+                continue;
+            }
+
+            int order = json.getAsJsonObject().get("order").getAsInt();
+            StageRaid raid = StageRaid.CODEC.parse(JsonOps.INSTANCE, json)
+                    .resultOrPartial(error -> LOGGER.error("Failed to parse stage raid {}: {}", entry.getKey(), error))
+                    .orElse(null);
+            if (raid == null) continue;
+
+            boolean matched = false;
+            for (Map.Entry<ResourceLocation, StageDefinition> stage : stages.entrySet()) {
+                if (stage.getValue().order() == order) {
+                    stage.setValue(StageAddition.withRaid(stage.getValue(), raid));
+                    matched = true;
+                }
+            }
+
+            if (matched) {
+                applied++;
+            } else {
+                LOGGER.warn("Stage raid {} targets order {}, but no stage with that order is loaded.", entry.getKey(), order);
             }
         }
         return applied;

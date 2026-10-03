@@ -18,7 +18,7 @@ import net.veroxuniverse.verox_rpg_prog.config.RPGProgressionConfig;
 import net.veroxuniverse.verox_rpg_prog.handler.BlockRestrictionHandler;
 import net.veroxuniverse.verox_rpg_prog.handler.ItemRestrictionHandler;
 import net.veroxuniverse.verox_rpg_prog.lootbag.ModDataComponents;
-import net.veroxuniverse.verox_rpg_prog.lootbag.ModItems;
+import net.veroxuniverse.verox_rpg_prog.registry.ModItems;
 import net.veroxuniverse.verox_rpg_prog.stage.WorldStageSavedData;
 import org.slf4j.Logger;
 

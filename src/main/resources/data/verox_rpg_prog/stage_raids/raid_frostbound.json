@@ -1,0 +1,56 @@
+{
+  "required_mods": [
+    "irons_spellbooks"
+  ],
+  "order": 2,
+  "name": "raid.verox_rpg_prog.frostbound",
+  "display_item": "minecraft:blue_ice",
+  "trigger": {
+    "time": "night",
+    "chance": 0.05,
+    "check_interval": 1200,
+    "cooldown": 72000
+  },
+  "waves": [
+    {
+      "mobs": [
+        {
+          "entity": "minecraft:stray",
+          "display_item": "minecraft:bow",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "mobs": [
+        {
+          "entity": "minecraft:stray",
+          "display_item": "minecraft:bow",
+          "count": 3
+        },
+        {
+          "entity": "irons_spellbooks:cryomancer",
+          "display_item": "irons_spellbooks:frozen_bone",
+          "count": 1
+        }
+      ]
+    }
+  ],
+  "leader": {
+    "entity": "irons_spellbooks:cryomancer",
+    "display_item": "irons_spellbooks:ice_staff",
+    "scaling": {
+      "health_multiplier": 2.0,
+      "damage_multiplier": 1.4
+    }
+  },
+  "mob_scaling": {
+    "health_multiplier": 1.15
+  },
+  "reward": {
+    "type": "map",
+    "structures": [
+      "irons_spellbooks:ice_spider_den"
+    ]
+  }
+}
